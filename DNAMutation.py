@@ -1,6 +1,16 @@
 import random
 import streamlit as st
 from Bio.Seq import Seq
+if "random_dna" not in st.session_state:
+    st.session_state.random_dna = ""
+
+if "mutation_result" not in st.session_state:
+    st.session_state.mutation_result = ""
+if "dna_input" not in st.session_state:
+    st.session_state.dna_input = ""
+
+# Add all others you plan to use...
+
 
 # Set page config and custom styles for background and output boxes
 st.set_page_config(page_title="DNA Mutation Simulator", layout="wide")
