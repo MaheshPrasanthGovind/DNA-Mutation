@@ -1,425 +1,401 @@
-import random
 import streamlit as st
-from Bio.Seq import Seq
-if "random_dna" not in st.session_state:
-    st.session_state.random_dna = ""
+import random
+import re
 
-if "mutation_result" not in st.session_state:
-    st.session_state.mutation_result = ""
-if "dna_input" not in st.session_state:
-    st.session_state.dna_input = ""
+# Set page config and background styling
+st.set_page_config(page_title="DNA Mutation Simulator 🧬", layout="wide")
+page_bg_css = """
+<style>
+body {
+    background-color: black;
+    color: white;
+}
+.stMarkdown div {
+    color: white;
+}
+.output-box {
+    background-color: #555555;
+    padding: 10px;
+    border-radius: 8px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+</style>
+"""
+st.markdown(page_bg_css, unsafe_allow_html=True)
 
-# Add all others you plan to use...
+# DNA validation function
+def validate_dna(seq):
+    """Validate that the sequence contains only A, T, C, G"""
+    return bool(re.fullmatch(r"[ATCGatcg]*", seq))
 
+# Generate a random DNA sequence
+def generate_random_dna(length=50):
+    return ''.join(random.choice('ATCG') for _ in range(length))
 
-# Set page config and custom styles for background and output boxes
-st.set_page_config(page_title="DNA Mutation Simulator", layout="wide")
-
-# Custom CSS for black background and gray output boxes with readable text
-st.markdown(
-    """
-    <style>
-    .main {
-        background-color: #000000;
-        color: white;
-        font-family: 'Courier New', Courier, monospace;
-    }
-    .output-box {
-        background-color: #2f2f2f;
-        padding: 10px;
-        border-radius: 8px;
-        color: #f0f0f0;
-        font-family: monospace;
-        white-space: pre-wrap;
-        overflow-x: auto;
-    }
-    .highlight {
-        color: #ff5555;
-        font-weight: bold;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-def validate_dna(sequence):
-    return all(base.upper() in 'ATGC' for base in sequence)
-
-def get_codon_and_aa(sequence, nucleotide_pos):
-    if not (0 <= nucleotide_pos < len(sequence)):
+# Mutation functions
+def apply_point_mutation(seq, position, new_base):
+    original_base = seq[position]
+    if original_base.upper() == new_base.upper():
         return None, None
+    mutated_seq = seq[:position] + new_base.upper() + seq[position+1:]
+    return mutated_seq, original_base.upper()
 
-    codon_start_pos = (nucleotide_pos // 3) * 3
-    codon_end_pos = codon_start_pos + 3
+def apply_insertion_mutation(seq, position, insert_seq):
+    mutated_seq = seq[:position] + insert_seq.upper() + seq[position:]
+    return mutated_seq, insert_seq.upper()
 
-    codon = sequence[codon_start_pos:codon_end_pos]
-
-    amino_acid = str(Seq(codon).translate(table=1))
-
-    return codon, amino_acid
-
-def highlight_mutation(original_seq, mutated_seq, pos, mutation_type, change_len=1):
-    # Highlight mutated parts in red using HTML span with 'highlight' class
-    def highlight_span(text):
-        return f'<span class="highlight">{text}</span>'
-
-    if mutation_type == 'point':
-        highlighted_orig = (
-            original_seq[:pos]
-            + highlight_span(original_seq[pos])
-            + original_seq[pos + 1 :]
-        )
-        highlighted_mut = (
-            mutated_seq[:pos]
-            + highlight_span(mutated_seq[pos])
-            + mutated_seq[pos + 1 :]
-        )
-    elif mutation_type == 'insertion':
-        # Highlight inserted sequence in mutated sequence
-        highlighted_orig = original_seq
-        highlighted_mut = (
-            mutated_seq[:pos]
-            + highlight_span(mutated_seq[pos : pos + change_len])
-            + mutated_seq[pos + change_len :]
-        )
-    elif mutation_type == 'deletion':
-        # Highlight deleted sequence in original sequence
-        highlighted_orig = (
-            original_seq[:pos]
-            + highlight_span(original_seq[pos : pos + change_len])
-            + original_seq[pos + change_len :]
-        )
-        highlighted_mut = mutated_seq
-    else:
-        highlighted_orig = original_seq
-        highlighted_mut = mutated_seq
-
-    return highlighted_orig, highlighted_mut
-
-def apply_point_mutation(dna_seq_str, pos, new_base):
-    length = len(dna_seq_str)
-    if not (0 <= pos < length):
+def apply_deletion_mutation(seq, position, length):
+    if position + length > len(seq):
         return None, None
-
-    original_base = dna_seq_str[pos]
-
-    mutated_seq = dna_seq_str[:pos] + new_base + dna_seq_str[pos + 1 :]
-    return mutated_seq, original_base
-
-def apply_insertion_mutation(dna_seq_str, pos, inserted_seq):
-    if not inserted_seq:
-        return None, None
-
-    length = len(dna_seq_str)
-    if not (0 <= pos <= length):
-        return None, None
-
-    mutated_seq = dna_seq_str[:pos] + inserted_seq + dna_seq_str[pos:]
-    return mutated_seq, inserted_seq
-
-def apply_deletion_mutation(dna_seq_str, pos, delete_length):
-    if delete_length <= 0:
-        return None, None
-
-    length = len(dna_seq_str)
-    if length < delete_length:
-        return None, None
-
-    if not (0 <= pos < length and (pos + delete_length) <= length):
-        return None, None
-
-    deleted_seq = dna_seq_str[pos : pos + delete_length]
-
-    mutated_seq = dna_seq_str[:pos] + dna_seq_str[pos + delete_length :]
+    deleted_seq = seq[position:position+length]
+    mutated_seq = seq[:position] + seq[position+length:]
     return mutated_seq, deleted_seq
 
-# Start of Streamlit app UI
-st.title("🚀 DNA Mutation Simulator!")
-st.markdown(
+# Highlight mutation in sequences
+def highlight_mutation(original_seq, mutated_seq, position, mutation_type, length=1):
     """
-    This tool helps you understand how tiny changes in DNA can lead to big differences in proteins.
-    Let's begin by providing a DNA sequence to work with!
+    Returns two HTML strings with mutations highlighted in red.
     """
-)
-
-# DNA input: manual or random
-dna_input_mode = st.radio(
-    "Choose DNA input method:",
-    options=["Manual Input", "Random Sequence"],
-    index=0,
-)
-
-original_dna_str = ""
-
-if dna_input_mode == "Manual Input":
-    dna_input = st.text_area(
-        "🚀 Enter your DNA sequence (A, T, G, C only):",
-        height=80,
-        max_chars=500,
-        placeholder="Example: ATGCGTGACTGACTGACGTA",
-    ).upper().strip()
-
-    if dna_input:
-        if validate_dna(dna_input):
-            original_dna_str = dna_input
-        else:
-            st.error("❌ Invalid DNA sequence! Only A, T, G, C allowed.")
-else:
-    length = st.slider(
-        "🔢 Select length of random DNA sequence:",
-        min_value=10,
-        max_value=500,
-        value=50,
-        step=1,
-    )
-    if st.button("Generate Random DNA Sequence"):
-        original_dna_str = ''.join(random.choice('ATGC') for _ in range(length))
-        st.success(f"✅ Random DNA sequence of length {length} generated!")
-
-if original_dna_str:
-    st.markdown(f"🧬 **Original DNA Sequence (Length: {len(original_dna_str)} bases):**")
-    st.markdown(f'<div class="output-box">{original_dna_str}</div>', unsafe_allow_html=True)
-
-    # Translate to protein if possible
-    if len(original_dna_str) >= 3:
-        try:
-            original_protein = str(Seq(original_dna_str).translate(table=1, to_stop=True))
-            st.markdown(f"➡️ **Original Protein Sequence (Length: {len(original_protein)} amino acids):**")
-            st.markdown(f'<div class="output-box">{original_protein}</div>', unsafe_allow_html=True)
-        except Exception:
-            st.warning("⚠️ Warning: DNA might be too short or irregular for full protein translation.")
+    def highlight_range(seq, start, end):
+        return seq[:start] + \
+               f"<span style='color:red;font-weight:bold;'>{seq[start:end]}</span>" + \
+               seq[end:]
+    
+    # Highlight original sequence
+    if mutation_type == "point":
+        orig_highlight = highlight_range(original_seq, position, position + 1)
+        mut_highlight = highlight_range(mutated_seq, position, position + 1)
+    elif mutation_type == "insertion":
+        orig_highlight = original_seq
+        mut_highlight = highlight_range(mutated_seq, position, position + length)
+    elif mutation_type == "deletion":
+        orig_highlight = highlight_range(original_seq, position, position + length)
+        mut_highlight = mutated_seq
     else:
-        st.warning("⚠️ Warning: DNA too short (<3 bases) for protein translation.")
-# --- Mutation Section ---
+        orig_highlight = original_seq
+        mut_highlight = mutated_seq
+    
+    return orig_highlight, mut_highlight
 
-st.header("🧪 Apply Mutations to DNA Sequence")
+# UI Header
+st.title("DNA Mutation Simulator 🧬🧬")
+st.markdown("Welcome! Simulate point mutations, insertions, and deletions in DNA sequences. 🚀")
 
-mutation_type = st.selectbox(
-    "Choose Mutation Type:",
-    options=["Point Mutation 🧬", "Insertion ➕", "Deletion ➖"],
-)
+# Input sequence or generate random
+input_option = st.radio("Choose input option:", ["Enter DNA sequence 🧬", "Generate random sequence 🎲"])
 
-mutated_dna_str = ""
-mutation_position = None
-mutation_info = ""
-highlighted_original = ""
-highlighted_mutated = ""
+if input_option == "Enter DNA sequence 🧬":
+    dna_input = st.text_area("Enter DNA sequence (only A, T, G, C):", height=100, max_chars=1000)
+else:
+    length = st.slider("Select length for random sequence:", min_value=10, max_value=500, value=50)
+    dna_input = generate_random_dna(length)
+    st.markdown(f"**Random DNA Sequence ({length} bases):**")
+    st.markdown(f"<div class='output-box'>{dna_input}</div>", unsafe_allow_html=True)
 
-if original_dna_str:
-    seq_len = len(original_dna_str)
+# Mutation type selection
+mutation_type = st.selectbox("Select mutation type:", ["point", "insertion", "deletion"])
 
-    if mutation_type == "Point Mutation 🧬":
-        mutation_position = st.number_input(
-            "Enter mutation position (0-based index):",
-            min_value=0,
-            max_value=seq_len - 1,
-            value=0,
-            step=1,
+# Mutation parameters based on type
+if mutation_type == "point":
+    position = st.number_input("Mutation position (0-indexed):", min_value=0, max_value=len(dna_input)-1 if dna_input else 0, step=1)
+    new_base = st.selectbox("New base:", ['A', 'T', 'C', 'G'])
+elif mutation_type == "insertion":
+    position = st.number_input("Insertion position (0-indexed):", min_value=0, max_value=len(dna_input), step=1)
+    insert_seq = st.text_input("Sequence to insert (A, T, G, C only):")
+elif mutation_type == "deletion":
+    position = st.number_input("Deletion start position (0-indexed):", min_value=0, max_value=len(dna_input)-1 if dna_input else 0, step=1)
+    del_length = st.number_input("Number of bases to delete:", min_value=1, max_value=len(dna_input)-position if dna_input else 1, step=1)
+
+# Button to apply mutation
+apply_mutation = st.button("Apply Mutation 🛠️")
+
+# Mutation result output will come in next chunk for better clarity and separation
+
+# Chunk 2
+
+# Function to highlight mutated parts in red
+def highlight_mutation(original_seq, mutated_seq, position, mutation_type, length=1):
+    def color_text(seq, start, end):
+        return (
+            seq[:start] +
+            f"<span style='color:red; font-weight:bold;'>{seq[start:end]}</span>" +
+            seq[end:]
         )
-        original_base = original_dna_str[mutation_position]
-        new_base = st.selectbox(
-            f"Replace base '{original_base}' at position {mutation_position} with:",
-            options=[b for b in 'ATGC' if b != original_base],
-        )
 
-        if st.button("Apply Point Mutation"):
-            mutated_seq, orig_base = apply_point_mutation(
-                original_dna_str, mutation_position, new_base
+    if mutation_type == "point":
+        orig_highlight = color_text(original_seq, position, position + 1)
+        mut_highlight = color_text(mutated_seq, position, position + 1)
+    elif mutation_type == "insertion":
+        orig_highlight = original_seq
+        mut_highlight = color_text(mutated_seq, position, position + length)
+    elif mutation_type == "deletion":
+        orig_highlight = color_text(original_seq, position, position + length)
+        mut_highlight = mutated_seq
+    else:
+        orig_highlight = original_seq
+        mut_highlight = mutated_seq
+
+    return orig_highlight, mut_highlight
+
+
+# Helper functions for mutations
+def apply_point_mutation(seq, position, new_base):
+    if position < 0 or position >= len(seq):
+        return None, None
+    original_base = seq[position]
+    mutated_seq = seq[:position] + new_base + seq[position+1:]
+    return mutated_seq, original_base
+
+
+def apply_insertion_mutation(seq, position, insert_seq):
+    if position < 0 or position > len(seq):
+        return None, None
+    mutated_seq = seq[:position] + insert_seq + seq[position:]
+    return mutated_seq, insert_seq
+
+
+def apply_deletion_mutation(seq, position, del_length):
+    if position < 0 or position + del_length > len(seq):
+        return None, None
+    deleted = seq[position:position+del_length]
+    mutated_seq = seq[:position] + seq[position+del_length:]
+    return mutated_seq, deleted
+
+
+# Mutation consequence description functions
+def consequence_point(original_base, new_base):
+    return f"Substituted {original_base} with {new_base} at position."
+
+
+def consequence_insertion(inserted_seq):
+    return f"Inserted sequence '{inserted_seq}'."
+
+
+def consequence_deletion(deleted_seq):
+    return f"Deleted sequence '{deleted_seq}'."
+
+
+# Random DNA generator
+def generate_random_dna(length=50):
+    bases = ['A', 'T', 'G', 'C']
+    return ''.join(random.choice(bases) for _ in range(length))
+
+
+# UI handling for random DNA generation
+if st.button("🎲 Generate Random DNA Sequence"):
+    rand_dna = generate_random_dna()
+    st.session_state.dna_input = rand_dna
+    st.experimental_rerun()
+
+
+# Display mutation result when user clicks "Apply Mutation"
+if st.button("🧪 Apply Mutation"):
+
+    seq = st.session_state.dna_input.upper() if "dna_input" in st.session_state else ""
+
+    if not validate_dna(seq):
+        st.error("❌ Invalid DNA sequence! Use only A, T, G, and C.")
+    else:
+        mutation_type = st.session_state.mutation_type if "mutation_type" in st.session_state else ""
+        position = st.session_state.position if "position" in st.session_state else None
+
+        if mutation_type == "point":
+            new_base = st.session_state.new_base if "new_base" in st.session_state else None
+            mutated_seq, original_base = apply_point_mutation(seq, position, new_base)
+            consequence = consequence_point(original_base, new_base)
+            length = 1
+
+        elif mutation_type == "insertion":
+            insert_seq = st.session_state.insert_seq if "insert_seq" in st.session_state else None
+            mutated_seq, inserted = apply_insertion_mutation(seq, position, insert_seq)
+            consequence = consequence_insertion(inserted)
+            length = len(insert_seq)
+
+        elif mutation_type == "deletion":
+            del_length = st.session_state.del_length if "del_length" in st.session_state else None
+            mutated_seq, deleted = apply_deletion_mutation(seq, position, del_length)
+            consequence = consequence_deletion(deleted)
+            length = del_length
+
+        else:
+            mutated_seq = None
+            consequence = ""
+            length = 1
+
+        if mutated_seq:
+            orig_highlight, mut_highlight = highlight_mutation(
+                seq, mutated_seq, position, mutation_type, length=length
             )
-            if mutated_seq:
-                mutated_dna_str = mutated_seq
-                highlighted_original, highlighted_mutated = highlight_mutation(
-                    original_dna_str, mutated_dna_str, mutation_position, 'point'
-                )
-                mutation_info = f"Point mutation: position {mutation_position}, {orig_base} → {new_base}."
 
-    elif mutation_type == "Insertion ➕":
-        mutation_position = st.number_input(
-            "Enter insertion position (0-based index):",
-            min_value=0,
-            max_value=seq_len,
-            value=0,
-            step=1,
-        )
-        inserted_seq = st.text_input(
-            "Enter DNA sequence to insert (A, T, G, C only):",
-            max_chars=50,
-        ).upper().strip()
+            st.markdown("#### 🧬 Original Sequence")
+            st.markdown(f"<div style='background-color:#555; padding:10px; border-radius:8px;'>{orig_highlight}</div>", unsafe_allow_html=True)
 
-        if st.button("Apply Insertion"):
-            if validate_dna(inserted_seq) and inserted_seq:
-                mutated_seq, inserted = apply_insertion_mutation(
-                    original_dna_str, mutation_position, inserted_seq
-                )
-                if mutated_seq:
-                    mutated_dna_str = mutated_seq
-                    highlighted_original, highlighted_mutated = highlight_mutation(
-                        original_dna_str, mutated_dna_str, mutation_position, 'insertion', len(inserted_seq)
-                    )
-                    mutation_info = f"Insertion: position {mutation_position}, inserted '{inserted_seq}'."
-            else:
-                st.error("Invalid insertion sequence! Use only A, T, G, C.")
+            st.markdown("#### 🧬 Mutated Sequence")
+            st.markdown(f"<div style='background-color:#555; padding:10px; border-radius:8px;'>{mut_highlight}</div>", unsafe_allow_html=True)
 
-    elif mutation_type == "Deletion ➖":
-        mutation_position = st.number_input(
-            "Enter deletion start position (0-based index):",
-            min_value=0,
-            max_value=seq_len - 1,
-            value=0,
-            step=1,
-        )
-        max_del_len = seq_len - mutation_position
-        delete_length = st.number_input(
-            "Enter number of bases to delete:",
-            min_value=1,
-            max_value=max_del_len,
-            value=1,
-            step=1,
-        )
+            st.markdown(f"#### ⚠️ Biological Consequence")
+            st.markdown(f"<div style='background-color:#333; color:white; padding:10px; border-radius:8px;'>{consequence}</div>", unsafe_allow_html=True)
 
-        if st.button("Apply Deletion"):
-            mutated_seq, deleted_seq = apply_deletion_mutation(
-                original_dna_str, mutation_position, delete_length
-            )
-            if mutated_seq:
-                mutated_dna_str = mutated_seq
-                highlighted_original, highlighted_mutated = highlight_mutation(
-                    original_dna_str, mutated_dna_str, mutation_position, 'deletion', delete_length
-                )
-                mutation_info = f"Deletion: position {mutation_position}, deleted '{deleted_seq}'."
+        else:
+            st.error("⚠️ Mutation failed: Check your position and input values.")
+# Chunk 3
 
-    # Display results after mutation
-    if mutated_dna_str:
-        st.markdown("### 🧬 DNA Sequences with Mutation Highlighted")
-        st.markdown(
-            "**Original Sequence:**",
-        )
-        st.markdown(
-            f'<div class="output-box" style="color:white;">{highlighted_original}</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "**Mutated Sequence:**",
-        )
-        st.markdown(
-            f'<div class="output-box" style="color:white;">{highlighted_mutated}</div>',
-            unsafe_allow_html=True,
-        )
-
-        # Translate mutated DNA
-        try:
-            mutated_protein = str(Seq(mutated_dna_str).translate(table=1, to_stop=True))
-            original_protein = str(Seq(original_dna_str).translate(table=1, to_stop=True))
-            st.markdown("### 🧫 Protein Sequences")
-            st.markdown(f"**Original Protein:**")
-            st.markdown(f'<div class="output-box">{original_protein}</div>', unsafe_allow_html=True)
-            st.markdown(f"**Mutated Protein:**")
-            st.markdown(f'<div class="output-box">{mutated_protein}</div>', unsafe_allow_html=True)
-
-            # Show mutation info and consequence
-            st.markdown(f"### ℹ️ Mutation Info")
-            st.info(mutation_info)
-
-            # Check protein change
-            if mutated_protein == original_protein:
-                st.success("🟢 Mutation is synonymous: no change in protein sequence.")
-            else:
-                st.warning("🔴 Mutation is non-synonymous: protein sequence changed!")
-
-        except Exception as e:
-            st.error(f"⚠️ Error translating DNA sequences: {str(e)}")
-# --- Utility Functions ---
-
+# Function to validate DNA sequence - only A, T, G, C allowed
 def validate_dna(seq):
     return all(base in "ATGC" for base in seq)
 
-def apply_point_mutation(seq, position, new_base):
-    if 0 <= position < len(seq) and new_base in "ATGC":
-        original_base = seq[position]
-        mutated_seq = seq[:position] + new_base + seq[position + 1:]
-        return mutated_seq, original_base
-    return None, None
 
-def apply_insertion_mutation(seq, position, insert_seq):
-    if 0 <= position <= len(seq) and validate_dna(insert_seq):
-        mutated_seq = seq[:position] + insert_seq + seq[position:]
-        return mutated_seq, insert_seq
-    return None, None
+# Streamlit input widgets for mutation parameters
 
-def apply_deletion_mutation(seq, position, length):
-    if 0 <= position < len(seq) and (position + length) <= len(seq):
-        deleted_seq = seq[position:position+length]
-        mutated_seq = seq[:position] + seq[position+length:]
-        return mutated_seq, deleted_seq
-    return None, None
+st.markdown("### ⚙️ Mutation Settings")
 
-def highlight_mutation(original, mutated, position, mutation_type, length=1):
+# Mutation type selector with emojis
+mutation_type = st.selectbox(
+    "Select Mutation Type 🧬",
+    options=["point", "insertion", "deletion"],
+    index=0,
+    help="Choose the type of mutation to apply"
+)
+
+# Save mutation type in session state for usage elsewhere
+st.session_state.mutation_type = mutation_type
+
+# Input DNA sequence box with gray background
+dna_input = st.text_area(
+    "Enter DNA Sequence 🔡",
+    value=st.session_state.get("dna_input", ""),
+    height=100,
+    max_chars=1000,
+    help="Input your DNA sequence here (A, T, G, C only).",
+    key="dna_input"
+)
+
+# Position input (0-indexed) with validation
+position = st.number_input(
+    "Mutation Position (0-indexed) 🔢",
+    min_value=0,
+    max_value=max(len(dna_input) - 1, 0),
+    value=0,
+    step=1,
+    help="Position in the sequence where mutation happens.",
+    key="position"
+)
+st.session_state.position = position
+
+# Conditional inputs based on mutation type
+if mutation_type == "point":
+    new_base = st.selectbox(
+        "New Base 🔄",
+        options=["A", "T", "G", "C"],
+        index=0,
+        help="Choose the base to substitute at the position.",
+        key="new_base"
+    )
+
+elif mutation_type == "insertion":
+    insert_seq = st.text_input(
+        "Sequence to Insert ➕",
+        value=st.session_state.get("insert_seq", ""),
+        max_chars=100,
+        help="Enter sequence to insert at the position.",
+        key="insert_seq"
+    )
+
+elif mutation_type == "deletion":
+    del_length = st.number_input(
+        "Number of Bases to Delete ➖",
+        min_value=1,
+        max_value=max(len(dna_input) - position, 1),
+        value=1,
+        step=1,
+        help="How many bases to delete starting from position.",
+        key="del_length"
+    )
+# Chunk 4
+
+# Function to apply point mutation
+def apply_point_mutation(seq, pos, new_base):
+    if pos >= len(seq) or new_base not in "ATGC":
+        return None, None
+    original_base = seq[pos]
+    mutated_seq = seq[:pos] + new_base + seq[pos + 1:]
+    return mutated_seq, original_base
+
+# Function to apply insertion mutation
+def apply_insertion_mutation(seq, pos, insert_seq):
+    if pos > len(seq):
+        return None, None
+    if not all(base in "ATGC" for base in insert_seq):
+        return None, None
+    mutated_seq = seq[:pos] + insert_seq + seq[pos:]
+    return mutated_seq, insert_seq
+
+# Function to apply deletion mutation
+def apply_deletion_mutation(seq, pos, length):
+    if pos + length > len(seq):
+        return None, None
+    deleted_seq = seq[pos:pos + length]
+    mutated_seq = seq[:pos] + seq[pos + length:]
+    return mutated_seq, deleted_seq
+
+# Function to highlight mutations in red
+def highlight_mutation(original, mutated, pos, mutation_type, length=1):
+    def colorize(seq, start, end):
+        return (
+            seq[:start] +
+            f"<span style='color:red; font-weight:bold;'>{seq[start:end]}</span>" +
+            seq[end:]
+        )
+
+    orig_highlight = original
+    mut_highlight = mutated
     if mutation_type == "point":
-        original_highlighted = (
-            original[:position]
-            + f"<span style='color:red;font-weight:bold'>{original[position]}</span>"
-            + original[position+1:]
-        )
-        mutated_highlighted = (
-            mutated[:position]
-            + f"<span style='color:red;font-weight:bold'>{mutated[position]}</span>"
-            + mutated[position+1:]
-        )
+        orig_highlight = colorize(original, pos, pos + 1)
+        mut_highlight = colorize(mutated, pos, pos + 1)
     elif mutation_type == "insertion":
-        original_highlighted = original
-        mutated_highlighted = (
-            mutated[:position]
-            + f"<span style='color:red;font-weight:bold'>{mutated[position:position+length]}</span>"
-            + mutated[position+length:]
-        )
+        mut_highlight = colorize(mutated, pos, pos + length)
     elif mutation_type == "deletion":
-        original_highlighted = (
-            original[:position]
-            + f"<span style='color:red;font-weight:bold'>{original[position:position+length]}</span>"
-            + original[position+length:]
-        )
-        mutated_highlighted = mutated
-    else:
-        original_highlighted = original
-        mutated_highlighted = mutated
+        orig_highlight = colorize(original, pos, pos + length)
+    return orig_highlight, mut_highlight
 
-    return original_highlighted, mutated_highlighted
 
-# --- Random DNA Generator ---
+# Process mutation and display results
 
-def generate_random_dna(length=60):
-    import random
-    return ''.join(random.choices("ATGC", k=length))
-
-st.sidebar.markdown("### 🧬 Random DNA Generator")
-random_dna_len = st.sidebar.slider("Random DNA Length", 10, 300, 60)
-if st.sidebar.button("🎲 Generate Random DNA"):
-    st.session_state.dna_input = generate_random_dna(random_dna_len)
-# --- Mutation Logic and Display ---
-
-if st.session_state.dna_input:
-    seq = st.session_state.dna_input.upper()
+if dna_input:
+    seq = dna_input.upper()
     st.markdown("<h3 style='color:white;'>🔬 Mutation Result</h3>", unsafe_allow_html=True)
 
     if not validate_dna(seq):
-        st.error("Invalid DNA sequence. Please enter a valid sequence using only A, T, G, and C.")
+        st.error("❌ Invalid DNA sequence. Use only A, T, G, and C.")
     else:
-        mutated_seq = seq
+        mutated_seq = None
         consequence = ""
+
         if mutation_type == "point":
             mutated_seq, original_base = apply_point_mutation(seq, position, new_base)
-            consequence = f"Substituted {original_base} with {new_base} at position {position}."
+            if mutated_seq:
+                consequence = f"Substituted {original_base} with {new_base} at position {position}."
+            else:
+                st.error("⚠️ Invalid point mutation parameters.")
         elif mutation_type == "insertion":
             mutated_seq, inserted = apply_insertion_mutation(seq, position, insert_seq)
-            consequence = f"Inserted {inserted} at position {position}."
+            if mutated_seq:
+                consequence = f"Inserted {inserted} at position {position}."
+            else:
+                st.error("⚠️ Invalid insertion parameters.")
         elif mutation_type == "deletion":
             mutated_seq, deleted = apply_deletion_mutation(seq, position, del_length)
-            consequence = f"Deleted {deleted} from position {position} to {position + del_length - 1}."
+            if mutated_seq:
+                consequence = f"Deleted {deleted} from position {position} to {position + del_length - 1}."
+            else:
+                st.error("⚠️ Invalid deletion parameters.")
 
         if mutated_seq:
             orig_highlight, mut_highlight = highlight_mutation(
                 seq, mutated_seq, position, mutation_type,
-                length=(len(insert_seq) if mutation_type == "insertion" else del_length)
+                length=(len(insert_seq) if mutation_type == "insertion" else del_length if mutation_type == "deletion" else 1)
             )
 
             st.markdown("#### 🧬 Original Sequence")
@@ -430,5 +406,3 @@ if st.session_state.dna_input:
 
             st.markdown(f"#### ⚠️ Biological Consequence")
             st.markdown(f"<div style='background-color:#333;color:white;padding:10px;border-radius:8px;'>{consequence}</div>", unsafe_allow_html=True)
-        else:
-            st.error("⚠️ Mutation failed due to invalid parameters.")
