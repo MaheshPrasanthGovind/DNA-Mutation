@@ -134,20 +134,43 @@ def transcribe_dna_to_mrna(dna_seq):
 def translate_mrna_to_protein(mrna_seq):
     """Translates an mRNA sequence into an amino acid sequence."""
     protein = []
-    # Start translation from the first 'AUG' (Methionine) if present, otherwise from the beginning
+    # Find the first 'AUG' (Methionine) to start translation
     start_codon_idx = mrna_seq.find('AUG')
-    if start_codon_idx == -1: # No start codon found, translate from beginning (non-standard)
+    
+    # If no AUG is found, or if the sequence before AUG is too short to form a codon,
+    # or if we are translating a very short segment,
+    # translate from the beginning of the sequence.
+    # This is a simplification for demonstration, actual translation initiation is complex.
+    if start_codon_idx == -1 or start_codon_idx % 3 != 0:
         coding_sequence = mrna_seq
     else:
         coding_sequence = mrna_seq[start_codon_idx:]
 
     for i in range(0, len(coding_sequence) - len(coding_sequence) % 3, 3):
         codon = coding_sequence[i:i+3]
-        amino_acid = GENETIC_CODE.get(codon, 'X') # 'X' for unknown codon
+        amino_acid = GENETIC_CODE.get(codon, 'X') # 'X' for unknown/invalid codon
         protein.append(amino_acid)
         if amino_acid == '*': # Stop codon
             break
     return "".join(protein)
+
+def get_codon_at_position(sequence, pos_idx_0based):
+    """
+    Given a sequence and a 0-based position, returns the 3-base codon
+    that contains that position and its 0-based start index.
+    Assumes translation starts from index 0 for this specific lookup.
+    Returns (codon, start_idx) or (None, None) if position is out of range or
+    cannot form a full codon.
+    """
+    if pos_idx_0based < 0 or pos_idx_0based >= len(sequence):
+        return None, None
+    
+    codon_start_idx = (pos_idx_0based // 3) * 3
+    if codon_start_idx + 3 > len(sequence):
+        return None, None # Not enough bases to form a full codon
+    
+    codon = sequence[codon_start_idx : codon_start_idx + 3]
+    return codon, codon_start_idx
 
 
 def highlight_mutation(original_seq, mutated_seq, position, mutation_type, length=1):
@@ -167,7 +190,7 @@ def highlight_mutation(original_seq, mutated_seq, position, mutation_type, lengt
             orig_highlight = original_seq[:position] + wrap_red(original_seq[position]) + original_seq[position+1:]
             mut_highlight = mutated_seq[:position] + wrap_red(mutated_seq[position]) + mutated_seq[position+1:]
     elif mutation_type == "insertion":
-        if 0 <= position <= len(mutated_seq) - length:
+        if 0 <= position <= len(mutated_seq) - length: # position can be len(mutated_seq) if inserting at end
             mut_highlight = mutated_seq[:position] + wrap_red(mutated_seq[position:position+length]) + mutated_seq[position+length:]
     elif mutation_type == "deletion":
         if 0 <= position <= len(original_seq) - length:
@@ -176,7 +199,6 @@ def highlight_mutation(original_seq, mutated_seq, position, mutation_type, lengt
     return orig_highlight, mut_highlight
 
 # --- Session State Initialization ---
-# Initialize session state variables if they don't exist
 if "dna_input" not in st.session_state:
     st.session_state.dna_input = ""
 if "mutation_type" not in st.session_state:
@@ -195,6 +217,26 @@ if "del_length" not in st.session_state:
 st.markdown("<h1 style='color:#50FA7B;'>🧬 DNA Mutation Lab 🧪🔬</h1>", unsafe_allow_html=True)
 st.markdown("<hr style='border: 1px solid #6272a4;'>", unsafe_allow_html=True)
 
+# New: Introduction for beginners
+with st.expander("What are DNA Mutations? 🤔 (For Beginners)"):
+    st.markdown("""
+    **DNA** (Deoxyribonucleic Acid) is the genetic blueprint of life! It's made of a sequence of building blocks called **bases**: Adenine (A), Thymine (T), Guanine (G), and Cytosine (C). Think of it like a long string of letters that contains instructions for building and operating an organism.
+
+    A **mutation** is a change in this DNA sequence. These changes can happen naturally or be caused by external factors. While some mutations have no effect, others can alter the instructions, leading to changes in proteins and potentially affecting an organism's traits or health.
+
+    This lab simulates three main types of mutations:
+
+    * **🎯 Point Mutation (Substitution):** This is when a **single base** in the DNA sequence is replaced by another base.
+        * *Example:* `ATGC` becomes `ATTC` (G is replaced by T).
+
+    * **➕ Insertion Mutation:** This is when **one or more extra bases** are added into the DNA sequence.
+        * *Example:* `ATGC` becomes `ATG**GTC**C` (GTC is inserted).
+
+    * **➖ Deletion Mutation:** This is when **one or more bases are removed** from the DNA sequence.
+        * *Example:* `ATGCGG` becomes `ATGG` (CG is deleted).
+    """)
+st.markdown("<br>", unsafe_allow_html=True) # Add some space
+
 # DNA sequence input
 dna_input_area = st.text_area(
     "🧬 Input DNA Sequence (A, T, G, C only):",
@@ -203,14 +245,14 @@ dna_input_area = st.text_area(
     max_chars=1000,
     help="✍️ Type or paste your DNA sequence here. It will be automatically converted to uppercase."
 )
-st.session_state.dna_input = dna_input_area.upper() # Always store uppercase
+st.session_state.dna_input = dna_input_area.upper()
 
 # Random DNA generator button
 if st.button("✨ Generate Random DNA Sequence"):
     random_seq = generate_random_dna(50)
     st.session_state.dna_input = random_seq
-    st.session_state.position = 1 # Reset position for new sequence
-    st.rerun() # Use st.rerun() for immediate UI update
+    st.session_state.position = 1
+    st.rerun()
 
 # Create two columns for mutation type and position
 col1, col2 = st.columns(2)
@@ -227,8 +269,6 @@ with col1:
 
 with col2:
     max_pos = len(st.session_state.dna_input) if st.session_state.dna_input else 1
-    # For insertion, position can be after the last base (len(seq) + 1)
-    # For deletion and point, position cannot be beyond the sequence length
     if mutation_type == "insertion":
         current_max_pos = max_pos + 1
     else:
@@ -238,7 +278,7 @@ with col2:
         "📍 Mutation Position (1-based index):",
         min_value=1,
         max_value=current_max_pos,
-        value=min(st.session_state.position, current_max_pos), # Adjust value if max changes
+        value=min(st.session_state.position, current_max_pos),
         step=1,
         key="mutation_position_input",
         help="🔢 The 1-based position where the mutation will occur."
@@ -266,7 +306,6 @@ elif mutation_type == "insertion":
     st.session_state.insert_seq = insert_seq
 elif mutation_type == "deletion":
     current_dna_length = len(st.session_state.dna_input)
-    # Max deletion length depends on the position chosen
     max_del_length = current_dna_length - (position - 1) if current_dna_length >= (position - 1) else 1
 
     del_length = st.number_input(
@@ -293,7 +332,7 @@ if st.button("🚀 Apply Mutation and Simulate"):
         st.error("❌ Invalid DNA sequence detected! Please use only A, T, G, and C. 🧐")
     elif mutation_type == "point" and (pos_idx < 0 or pos_idx >= len(seq)):
         st.error(f"⚠️ Position {st.session_state.position} is out of bounds for a point mutation in a sequence of length {len(seq)}. Try again! 📏")
-    elif mutation_type == "insertion" and (pos_idx < 0 or pos_idx > len(seq)): # Insertion can be at len(seq)
+    elif mutation_type == "insertion" and (pos_idx < 0 or pos_idx > len(seq)):
         st.error(f"⚠️ Position {st.session_state.position} is out of range for insertion in a sequence of length {len(seq)}. 🚧")
     elif mutation_type == "deletion" and (st.session_state.del_length < 1 or pos_idx < 0 or pos_idx + st.session_state.del_length > len(seq)):
         st.error(f"⚠️ Invalid deletion length or range! Cannot delete {st.session_state.del_length} bases starting at position {st.session_state.position} from a sequence of length {len(seq)}. 🤔")
@@ -304,14 +343,15 @@ if st.button("🚀 Apply Mutation and Simulate"):
     else:
         mutated_seq = ""
         consequence_summary = ""
-        biological_impact_details = "" # This will be populated in the next step
+        biological_impact_details = ""
+        mutation_length_for_highlight = 1
 
-        mutation_length_for_highlight = 1 # Default for point, will be overridden
-
+        # --- Perform Mutation ---
         if mutation_type == "point":
             mutated_seq, original_base = apply_point_mutation(seq, pos_idx, st.session_state.new_base)
             if mutated_seq == seq:
                 consequence_summary = f"No actual change occurred! 🔄 The base '{original_base}' was already at position {st.session_state.position}. Sequence remains identical. ✅"
+                biological_impact_details = "Since no change occurred, there is no biological impact on the sequence."
             else:
                 consequence_summary = f"Point mutation: Substituted '{original_base}' with '{st.session_state.new_base}' at position {st.session_state.position}. 🎯"
             mutation_length_for_highlight = 1
@@ -331,19 +371,97 @@ if st.button("🚀 Apply Mutation and Simulate"):
         mutated_mrna = transcribe_dna_to_mrna(mutated_seq)
         mutated_protein = translate_mrna_to_protein(mutated_mrna)
 
+        # --- Biological Impact Classification ---
+        if mutation_type == "point" and mutated_seq != seq: # Only classify if an actual change happened
+            orig_codon, _ = get_codon_at_position(original_mrna, pos_idx)
+            mut_codon, _ = get_codon_at_position(mutated_mrna, pos_idx)
 
-        # --- Highlight and display results ---
+            if orig_codon and mut_codon: # Ensure codons can be extracted
+                orig_aa = GENETIC_CODE.get(orig_codon, 'X')
+                mut_aa = GENETIC_CODE.get(mut_codon, 'X')
+
+                if orig_aa == mut_aa:
+                    biological_impact_details = f"""
+                    **Type: Silent Mutation 🤫**
+                    * The base change from `{seq[pos_idx]}` to `{st.session_state.new_base}` at DNA position {st.session_state.position} altered the mRNA codon from `{orig_codon}` to `{mut_codon}`.
+                    * However, both codons translate to the **same amino acid ({orig_aa})**.
+                    * This typically has **no direct biological impact** on the resulting protein due to the redundancy of the genetic code.
+                    """
+                elif mut_aa == '*':
+                    biological_impact_details = f"""
+                    **Type: Nonsense Mutation 💀**
+                    * The base change from `{seq[pos_idx]}` to `{st.session_state.new_base}` at DNA position {st.session_state.position} altered the mRNA codon from `{orig_codon}` to `{mut_codon}`.
+                    * The new codon `{mut_codon}` is a **premature stop codon**.
+                    * This leads to a **truncated (shortened) protein**, which is usually **non-functional** and can have severe biological consequences.
+                    """
+                elif orig_aa != 'X' and mut_aa != 'X': # Exclude 'X' for unknown codons
+                    biological_impact_details = f"""
+                    **Type: Missense Mutation 🧬**
+                    * The base change from `{seq[pos_idx]}` to `{st.session_state.new_base}` at DNA position {st.session_state.position} altered the mRNA codon from `{orig_codon}` to `{mut_codon}`.
+                    * This results in a change from amino acid `{orig_aa}` to `{mut_aa}`.
+                    * The biological impact can vary:
+                        * **Conservative Missense:** If the new amino acid is chemically similar to the original, the impact might be minimal.
+                        * **Non-conservative Missense:** If the new amino acid is chemically different, it can significantly alter the protein's shape, function, or stability, potentially causing disease.
+                    """
+                else: # Fallback for edge cases with invalid codons
+                     biological_impact_details = f"""
+                    **Type: Point Mutation (Unclassified) ❓**
+                    * A base change occurred at position {st.session_state.position}.
+                    * Could not precisely classify the amino acid change (e.g., due to an invalid codon).
+                    * Typically leads to a change in a single amino acid or premature stop codon.
+                    """
+            else: # If codon extraction failed
+                 biological_impact_details = f"""
+                **Type: Point Mutation (Context Issue) ❓**
+                * A base change occurred at position {st.session_state.position}.
+                * Could not classify the amino acid change precisely, possibly due to the mutation occurring at the very end of the sequence or if the sequence is too short to form a codon.
+                """
+
+        elif mutation_type == "insertion":
+            if len(st.session_state.insert_seq) % 3 == 0:
+                biological_impact_details = f"""
+                **Type: In-frame Insertion ➕ (Length: {len(st.session_state.insert_seq)})**
+                * The number of inserted bases ({len(st.session_state.insert_seq)}) is a multiple of 3.
+                * The genetic "reading frame" of the sequence is **maintained** after the insertion point.
+                * This results in the **addition of new amino acids** to the protein sequence.
+                * The impact can range from **minor** (if the added amino acids don't disrupt protein folding or active sites) to **significant** (if a crucial region is affected, leading to altered or non-functional proteins).
+                """
+            else:
+                biological_impact_details = f"""
+                **Type: Frameshift Insertion 🚨 (Length: {len(st.session_state.insert_seq)})**
+                * The number of inserted bases ({len(st.session_state.insert_seq)}) is NOT a multiple of 3.
+                * The genetic "reading frame" of the sequence is **shifted** from the point of insertion onwards.
+                * This drastically changes all downstream codons, leading to a completely different amino acid sequence.
+                * Often results in a **premature stop codon** and a **non-functional protein**, leading to severe consequences.
+                """
+        elif mutation_type == "deletion":
+            if st.session_state.del_length % 3 == 0:
+                biological_impact_details = f"""
+                **Type: In-frame Deletion ➖ (Length: {st.session_state.del_length})**
+                * The number of deleted bases ({st.session_state.del_length}) is a multiple of 3.
+                * The genetic "reading frame" of the sequence is **maintained** after the deletion point.
+                * This results in the **removal of amino acids** from the protein sequence.
+                * The impact can range from **minor** (if the deleted amino acids don't disrupt protein folding or active sites) to **significant** (if a crucial region is affected, leading to altered or non-functional proteins).
+                """
+            else:
+                biological_impact_details = f"""
+                **Type: Frameshift Deletion 🚨 (Length: {st.session_state.del_length})**
+                * The number of deleted bases ({st.session_state.del_length}) is NOT a multiple of 3.
+                * The genetic "reading frame" of the sequence is **shifted** from the point of deletion onwards.
+                * This drastically changes all downstream codons, leading to a completely different amino acid sequence.
+                * Often results in a **premature stop codon** and a **non-functional protein**, leading to severe consequences.
+                """
+        # --- Display Results ---
         orig_highlight_dna, mut_highlight_dna = highlight_mutation(
             seq,
             mutated_seq,
-            pos_idx, # Pass 0-based index to highlight function
+            pos_idx,
             mutation_type,
             length=mutation_length_for_highlight
         )
 
-        st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True) # Dotted separator
+        st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True)
 
-        # Display DNA sequences
         st.markdown("### 🧬 Original DNA Sequence:")
         st.markdown(
             f"<div class='output-box'>{orig_highlight_dna}</div>",
@@ -356,20 +474,17 @@ if st.button("🚀 Apply Mutation and Simulate"):
             unsafe_allow_html=True
         )
 
-        st.markdown("---") # Separator for RNA/Protein
+        st.markdown("---")
 
-        # Display mRNA sequences
         st.markdown("### 📊 mRNA Sequences (Transcribed from DNA):")
         st.markdown(f"**Original mRNA:** `{original_mrna}`")
         st.markdown(f"**Mutated mRNA:** `{mutated_mrna}`")
 
-
-        # Display Protein sequences
         st.markdown("### 🧪 Protein Sequences (Translated from mRNA):")
         st.markdown(f"**Original Protein:** `{original_protein}`")
         st.markdown(f"**Mutated Protein:** `{mutated_protein}`")
 
-        st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True) # Dotted separator
+        st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True)
 
         st.markdown("### 🔬 Summary of Mutation:")
         st.markdown(
@@ -377,11 +492,9 @@ if st.button("🚀 Apply Mutation and Simulate"):
             unsafe_allow_html=True
         )
 
-        # The biological impact details will be populated in the next step based on mutation classification
         st.markdown("### 💡 Potential Biological Impact:")
         with st.expander("Click to learn more about the biological impact of this mutation type"):
-            # This section will be dynamic based on classification in the next step
             st.markdown(
-                f"<div class='biological-impact-box'>{biological_impact_details if biological_impact_details else 'Details will appear here after mutation classification is implemented!'}</div>",
+                f"<div class='biological-impact-box'>{biological_impact_details}</div>",
                 unsafe_allow_html=True
             )
