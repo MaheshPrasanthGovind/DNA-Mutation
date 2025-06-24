@@ -3,7 +3,7 @@ import random
 import re
 
 # --- Set Page Config and Custom CSS for Dark Theme ---
-st.set_page_config(page_title="🧬 DNA Mutation Lab", page_icon="🔬", layout="wide") # Changed page icon for more consistency
+st.set_page_config(page_title="🧬 DNA Mutation Lab", page_icon="🔬", layout="wide")
 
 st.markdown(
     """
@@ -62,6 +62,13 @@ st.markdown(
         border: 1px solid #44475a;
         border-radius: 8px;
         padding: 8px;
+    }
+    .biological-impact-box {
+        background-color: #282a36;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #bd93f9; /* Purple border for biological info */
+        margin-top: 15px;
     }
     </style>
     """,
@@ -140,7 +147,7 @@ if "del_length" not in st.session_state:
 
 # --- Streamlit UI Layout ---
 
-st.markdown("<h1 style='color:#50FA7B;'>🧬 DNA Mutation Lab 🧪🔬</h1>", unsafe_allow_html=True) # Added more emojis to main title
+st.markdown("<h1 style='color:#50FA7B;'>🧬 DNA Mutation Lab 🧪🔬</h1>", unsafe_allow_html=True)
 st.markdown("<hr style='border: 1px solid #6272a4;'>", unsafe_allow_html=True)
 
 # DNA sequence input
@@ -154,7 +161,7 @@ dna_input_area = st.text_area(
 st.session_state.dna_input = dna_input_area.upper() # Always store uppercase
 
 # Random DNA generator button
-if st.button("✨ Generate Random DNA Sequence"): # More sparkling emoji
+if st.button("✨ Generate Random DNA Sequence"):
     random_seq = generate_random_dna(50)
     st.session_state.dna_input = random_seq
     st.session_state.position = 1 # Reset position for new sequence
@@ -175,11 +182,18 @@ with col1:
 
 with col2:
     max_pos = len(st.session_state.dna_input) if st.session_state.dna_input else 1
+    # For insertion, position can be after the last base (len(seq) + 1)
+    # For deletion and point, position cannot be beyond the sequence length
+    if mutation_type == "insertion":
+        current_max_pos = max_pos + 1
+    else:
+        current_max_pos = max_pos
+
     position = st.number_input(
-        "📍 Mutation Position (1-based index):", # Added pin emoji
+        "📍 Mutation Position (1-based index):",
         min_value=1,
-        max_value=max_pos + (1 if mutation_type == "insertion" else 0), # Allow insertion at the end
-        value=min(st.session_state.position, max_pos + (1 if mutation_type == "insertion" else 0)),
+        max_value=current_max_pos,
+        value=min(st.session_state.position, current_max_pos), # Adjust value if max changes
         step=1,
         key="mutation_position_input",
         help="🔢 The 1-based position where the mutation will occur."
@@ -189,7 +203,7 @@ with col2:
 # Dynamic inputs based on mutation type
 if mutation_type == "point":
     new_base = st.selectbox(
-        "➡️ New Base (Substitution):", # Arrow emoji
+        "➡️ New Base (Substitution):",
         options=["A", "T", "G", "C"],
         index=["A", "T", "G", "C"].index(st.session_state.new_base),
         key="new_base_select",
@@ -198,7 +212,7 @@ if mutation_type == "point":
     st.session_state.new_base = new_base
 elif mutation_type == "insertion":
     insert_seq = st.text_input(
-        "➕ Sequence to Insert:", # Plus emoji
+        "➕ Sequence to Insert:",
         value=st.session_state.insert_seq,
         max_chars=100,
         help="✍️ Enter the sequence of bases (e.g., GGTCA) to insert.",
@@ -211,7 +225,7 @@ elif mutation_type == "deletion":
     max_del_length = current_dna_length - (position - 1) if current_dna_length >= (position - 1) else 1
 
     del_length = st.number_input(
-        "✂️ Length of Deletion:", # Scissor emoji
+        "✂️ Length of Deletion:",
         min_value=1,
         max_value=max_del_length,
         value=min(st.session_state.del_length, max_del_length),
@@ -223,7 +237,7 @@ elif mutation_type == "deletion":
 
 # --- Apply Mutation Button and Display Results ---
 
-if st.button("🚀 Apply Mutation and Simulate"): # Rocket emoji
+if st.button("🚀 Apply Mutation and Simulate"):
     seq = st.session_state.dna_input
     pos_idx = st.session_state.position - 1  # Convert to 0-based index for internal functions
 
@@ -244,24 +258,67 @@ if st.button("🚀 Apply Mutation and Simulate"): # Rocket emoji
         st.error("❌ Invalid sequence to insert. It must contain only A, T, G, and C. 🧬")
     else:
         mutated_seq = ""
-        consequence = ""
+        consequence_summary = ""
+        biological_impact_details = ""
         mutation_length_for_highlight = 1 # Default for point, will be overridden
 
         if mutation_type == "point":
             mutated_seq, original_base = apply_point_mutation(seq, pos_idx, st.session_state.new_base)
             if mutated_seq == seq:
-                consequence = f"No actual change occurred! 🔄 The base '{original_base}' was already at position {st.session_state.position}. Sequence remains identical. ✅"
+                consequence_summary = f"No actual change occurred! 🔄 The base '{original_base}' was already at position {st.session_state.position}. Sequence remains identical. ✅"
+                biological_impact_details = "Since no change occurred, there is no biological impact."
             else:
-                consequence = f"Point mutation: Substituted '{original_base}' with '{st.session_state.new_base}' at position {st.session_state.position}. 🎯"
+                consequence_summary = f"Point mutation: Substituted '{original_base}' with '{st.session_state.new_base}' at position {st.session_state.position}. 🎯"
+                biological_impact_details = """
+                **Potential Biological Impact of Point Mutations:**
+                Point mutations are single base changes. Their impact depends on how they affect the codon (three-base sequence) and the resulting amino acid.
+                * **Silent Mutation:** The base change does not alter the amino acid sequence (due to redundancy in the genetic code). This has **no biological impact**.
+                * **Missense Mutation:** The base change results in a different amino acid. This can range from **minimal impact** (if the new amino acid is chemically similar) to **significant impact** (if it changes protein shape or function, like in Sickle Cell Anemia).
+                * **Nonsense Mutation:** The base change results in a premature stop codon. This leads to a **truncated, usually non-functional protein**, often with severe consequences.
+                """
             mutation_length_for_highlight = 1
         elif mutation_type == "insertion":
             mutated_seq, inserted = apply_insertion_mutation(seq, pos_idx, st.session_state.insert_seq)
-            consequence = f"Insertion: Inserted '{inserted}' (length {len(inserted)}) at position {st.session_state.position}. ➕"
+            consequence_summary = f"Insertion: Inserted '{inserted}' (length {len(inserted)}) at position {st.session_state.position}. ➕"
             mutation_length_for_highlight = len(st.session_state.insert_seq)
+
+            if len(inserted) % 3 == 0:
+                biological_impact_details = f"""
+                **Potential Biological Impact of Insertion (Length {len(inserted)}):**
+                This is an **in-frame insertion** because the number of inserted bases ({len(inserted)}) is a multiple of 3.
+                * The genetic "reading frame" of the sequence is maintained.
+                * This means amino acids are added to the protein sequence.
+                * The impact can range from **minor** (if the added amino acids don't disrupt protein folding or active sites) to **significant** (if a crucial region is affected, leading to altered or non-functional proteins).
+                """
+            else:
+                biological_impact_details = f"""
+                **Potential Biological Impact of Insertion (Length {len(inserted)}):**
+                This is a **frameshift mutation** because the number of inserted bases ({len(inserted)}) is NOT a multiple of 3.
+                * The genetic "reading frame" of the sequence is shifted from the point of insertion onwards.
+                * This drastically changes all downstream codons, leading to a completely different amino acid sequence.
+                * Often results in a **premature stop codon** and a **non-functional protein**, leading to severe consequences.
+                """
         elif mutation_type == "deletion":
             mutated_seq, deleted = apply_deletion_mutation(seq, pos_idx, st.session_state.del_length)
-            consequence = f"Deletion: Removed '{deleted}' (length {st.session_state.del_length}) from position {st.session_state.position} to {st.session_state.position + st.session_state.del_length - 1}. ➖"
+            consequence_summary = f"Deletion: Removed '{deleted}' (length {st.session_state.del_length}) from position {st.session_state.position} to {st.session_state.position + st.session_state.del_length - 1}. ➖"
             mutation_length_for_highlight = st.session_state.del_length
+
+            if st.session_state.del_length % 3 == 0:
+                biological_impact_details = f"""
+                **Potential Biological Impact of Deletion (Length {st.session_state.del_length}):**
+                This is an **in-frame deletion** because the number of deleted bases ({st.session_state.del_length}) is a multiple of 3.
+                * The genetic "reading frame" of the sequence is maintained.
+                * This means amino acids are removed from the protein sequence.
+                * The impact can range from **minor** (if the deleted amino acids don't disrupt protein folding or active sites) to **significant** (if a crucial region is affected, leading to altered or non-functional proteins).
+                """
+            else:
+                biological_impact_details = f"""
+                **Potential Biological Impact of Deletion (Length {st.session_state.del_length}):**
+                This is a **frameshift mutation** because the number of deleted bases ({st.session_state.del_length}) is NOT a multiple of 3.
+                * The genetic "reading frame" of the sequence is shifted from the point of deletion onwards.
+                * This drastically changes all downstream codons, leading to a completely different amino acid sequence.
+                * Often results in a **premature stop codon** and a **non-functional protein**, leading to severe consequences.
+                """
 
         # Highlight and display results
         orig_highlight, mut_highlight = highlight_mutation(
@@ -274,20 +331,27 @@ if st.button("🚀 Apply Mutation and Simulate"): # Rocket emoji
 
         st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True) # Dotted separator
 
-        st.markdown("### 🧬 Original DNA Sequence:") # Changed to h3, added emoji
+        st.markdown("### 🧬 Original DNA Sequence:")
         st.markdown(
             f"<div class='output-box'>{orig_highlight}</div>",
             unsafe_allow_html=True
         )
 
-        st.markdown("### 🧬 Mutated DNA Sequence:") # Changed to h3, added emoji
+        st.markdown("### 🧬 Mutated DNA Sequence:")
         st.markdown(
             f"<div class='output-box'>{mut_highlight}</div>",
             unsafe_allow_html=True
         )
 
-        st.markdown("### 🔬 Biological Consequence:") # Changed to h3, added emoji
+        st.markdown("### 🔬 Summary of Mutation:")
         st.markdown(
-            f"<div style='background-color:#222;color:#ff5555;padding:15px;border-radius:10px;font-weight:bold; border: 1px solid #ff5555;'>{consequence}</div>", # More defined consequence box
+            f"<div style='background-color:#222;color:#ff5555;padding:15px;border-radius:10px;font-weight:bold; border: 1px solid #ff5555;'>{consequence_summary}</div>",
             unsafe_allow_html=True
         )
+
+        st.markdown("### 💡 Potential Biological Impact:")
+        with st.expander("Click to learn more about the biological impact of this mutation type"):
+            st.markdown(
+                f"<div class='biological-impact-box'>{biological_impact_details}</div>",
+                unsafe_allow_html=True
+            )
