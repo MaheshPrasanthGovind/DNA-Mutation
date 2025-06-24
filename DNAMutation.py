@@ -75,6 +75,27 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# --- Genetic Code Dictionary ---
+GENETIC_CODE = {
+    'UUU': 'F', 'UUC': 'F', 'UUA': 'L', 'UUG': 'L',
+    'UCU': 'S', 'UCC': 'S', 'UCA': 'S', 'UCG': 'S',
+    'UAU': 'Y', 'UAC': 'Y', 'UAA': '*', 'UAG': '*',  # * for Stop
+    'UGU': 'C', 'UGC': 'C', 'UGA': '*', 'UGG': 'W',
+    'CUU': 'L', 'CUC': 'L', 'CUA': 'L', 'CUG': 'L',
+    'CCU': 'P', 'CCC': 'P', 'CCA': 'P', 'CCG': 'P',
+    'CAU': 'H', 'CAC': 'H', 'CAA': 'Q', 'CAG': 'Q',
+    'CGU': 'R', 'CGC': 'R', 'CGA': 'R', 'CGG': 'R',
+    'AUU': 'I', 'AUC': 'I', 'AUA': 'I', 'AUG': 'M',  # AUG is Start and Met
+    'ACU': 'T', 'ACC': 'T', 'ACA': 'T', 'ACG': 'T',
+    'AAU': 'N', 'AAC': 'N', 'AAA': 'K', 'AAG': 'K',
+    'AGU': 'S', 'AGC': 'S', 'AGA': 'R', 'AGG': 'R',
+    'GUU': 'V', 'GUC': 'V', 'GUA': 'V', 'GUG': 'V',
+    'GCU': 'A', 'GCC': 'A', 'GCA': 'A', 'GCG': 'A',
+    'GAU': 'D', 'GAC': 'D', 'GAA': 'E', 'GAG': 'E',
+    'GGU': 'G', 'GGC': 'G', 'GGA': 'G', 'GGG': 'G',
+}
+
+
 # --- Utility Functions ---
 
 def validate_dna(seq):
@@ -104,6 +125,30 @@ def apply_deletion_mutation(seq, position, del_length):
     deleted_seq = seq[position:position+del_length]
     mutated_seq = seq[:position] + seq[position+del_length:]
     return mutated_seq, deleted_seq
+
+def transcribe_dna_to_mrna(dna_seq):
+    """Transcribes a DNA sequence (template strand) to an mRNA sequence."""
+    mrna = dna_seq.replace('T', 'U')
+    return mrna
+
+def translate_mrna_to_protein(mrna_seq):
+    """Translates an mRNA sequence into an amino acid sequence."""
+    protein = []
+    # Start translation from the first 'AUG' (Methionine) if present, otherwise from the beginning
+    start_codon_idx = mrna_seq.find('AUG')
+    if start_codon_idx == -1: # No start codon found, translate from beginning (non-standard)
+        coding_sequence = mrna_seq
+    else:
+        coding_sequence = mrna_seq[start_codon_idx:]
+
+    for i in range(0, len(coding_sequence) - len(coding_sequence) % 3, 3):
+        codon = coding_sequence[i:i+3]
+        amino_acid = GENETIC_CODE.get(codon, 'X') # 'X' for unknown codon
+        protein.append(amino_acid)
+        if amino_acid == '*': # Stop codon
+            break
+    return "".join(protein)
+
 
 def highlight_mutation(original_seq, mutated_seq, position, mutation_type, length=1):
     """
@@ -259,69 +304,36 @@ if st.button("🚀 Apply Mutation and Simulate"):
     else:
         mutated_seq = ""
         consequence_summary = ""
-        biological_impact_details = ""
+        biological_impact_details = "" # This will be populated in the next step
+
         mutation_length_for_highlight = 1 # Default for point, will be overridden
 
         if mutation_type == "point":
             mutated_seq, original_base = apply_point_mutation(seq, pos_idx, st.session_state.new_base)
             if mutated_seq == seq:
                 consequence_summary = f"No actual change occurred! 🔄 The base '{original_base}' was already at position {st.session_state.position}. Sequence remains identical. ✅"
-                biological_impact_details = "Since no change occurred, there is no biological impact."
             else:
                 consequence_summary = f"Point mutation: Substituted '{original_base}' with '{st.session_state.new_base}' at position {st.session_state.position}. 🎯"
-                biological_impact_details = """
-                **Potential Biological Impact of Point Mutations:**
-                Point mutations are single base changes. Their impact depends on how they affect the codon (three-base sequence) and the resulting amino acid.
-                * **Silent Mutation:** The base change does not alter the amino acid sequence (due to redundancy in the genetic code). This has **no biological impact**.
-                * **Missense Mutation:** The base change results in a different amino acid. This can range from **minimal impact** (if the new amino acid is chemically similar) to **significant impact** (if it changes protein shape or function, like in Sickle Cell Anemia).
-                * **Nonsense Mutation:** The base change results in a premature stop codon. This leads to a **truncated, usually non-functional protein**, often with severe consequences.
-                """
             mutation_length_for_highlight = 1
         elif mutation_type == "insertion":
             mutated_seq, inserted = apply_insertion_mutation(seq, pos_idx, st.session_state.insert_seq)
             consequence_summary = f"Insertion: Inserted '{inserted}' (length {len(inserted)}) at position {st.session_state.position}. ➕"
             mutation_length_for_highlight = len(st.session_state.insert_seq)
-
-            if len(inserted) % 3 == 0:
-                biological_impact_details = f"""
-                **Potential Biological Impact of Insertion (Length {len(inserted)}):**
-                This is an **in-frame insertion** because the number of inserted bases ({len(inserted)}) is a multiple of 3.
-                * The genetic "reading frame" of the sequence is maintained.
-                * This means amino acids are added to the protein sequence.
-                * The impact can range from **minor** (if the added amino acids don't disrupt protein folding or active sites) to **significant** (if a crucial region is affected, leading to altered or non-functional proteins).
-                """
-            else:
-                biological_impact_details = f"""
-                **Potential Biological Impact of Insertion (Length {len(inserted)}):**
-                This is a **frameshift mutation** because the number of inserted bases ({len(inserted)}) is NOT a multiple of 3.
-                * The genetic "reading frame" of the sequence is shifted from the point of insertion onwards.
-                * This drastically changes all downstream codons, leading to a completely different amino acid sequence.
-                * Often results in a **premature stop codon** and a **non-functional protein**, leading to severe consequences.
-                """
         elif mutation_type == "deletion":
             mutated_seq, deleted = apply_deletion_mutation(seq, pos_idx, st.session_state.del_length)
             consequence_summary = f"Deletion: Removed '{deleted}' (length {st.session_state.del_length}) from position {st.session_state.position} to {st.session_state.position + st.session_state.del_length - 1}. ➖"
             mutation_length_for_highlight = st.session_state.del_length
 
-            if st.session_state.del_length % 3 == 0:
-                biological_impact_details = f"""
-                **Potential Biological Impact of Deletion (Length {st.session_state.del_length}):**
-                This is an **in-frame deletion** because the number of deleted bases ({st.session_state.del_length}) is a multiple of 3.
-                * The genetic "reading frame" of the sequence is maintained.
-                * This means amino acids are removed from the protein sequence.
-                * The impact can range from **minor** (if the deleted amino acids don't disrupt protein folding or active sites) to **significant** (if a crucial region is affected, leading to altered or non-functional proteins).
-                """
-            else:
-                biological_impact_details = f"""
-                **Potential Biological Impact of Deletion (Length {st.session_state.del_length}):**
-                This is a **frameshift mutation** because the number of deleted bases ({st.session_state.del_length}) is NOT a multiple of 3.
-                * The genetic "reading frame" of the sequence is shifted from the point of deletion onwards.
-                * This drastically changes all downstream codons, leading to a completely different amino acid sequence.
-                * Often results in a **premature stop codon** and a **non-functional protein**, leading to severe consequences.
-                """
+        # --- Perform Transcription and Translation ---
+        original_mrna = transcribe_dna_to_mrna(seq)
+        original_protein = translate_mrna_to_protein(original_mrna)
 
-        # Highlight and display results
-        orig_highlight, mut_highlight = highlight_mutation(
+        mutated_mrna = transcribe_dna_to_mrna(mutated_seq)
+        mutated_protein = translate_mrna_to_protein(mutated_mrna)
+
+
+        # --- Highlight and display results ---
+        orig_highlight_dna, mut_highlight_dna = highlight_mutation(
             seq,
             mutated_seq,
             pos_idx, # Pass 0-based index to highlight function
@@ -331,17 +343,33 @@ if st.button("🚀 Apply Mutation and Simulate"):
 
         st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True) # Dotted separator
 
+        # Display DNA sequences
         st.markdown("### 🧬 Original DNA Sequence:")
         st.markdown(
-            f"<div class='output-box'>{orig_highlight}</div>",
+            f"<div class='output-box'>{orig_highlight_dna}</div>",
             unsafe_allow_html=True
         )
 
         st.markdown("### 🧬 Mutated DNA Sequence:")
         st.markdown(
-            f"<div class='output-box'>{mut_highlight}</div>",
+            f"<div class='output-box'>{mut_highlight_dna}</div>",
             unsafe_allow_html=True
         )
+
+        st.markdown("---") # Separator for RNA/Protein
+
+        # Display mRNA sequences
+        st.markdown("### 📊 mRNA Sequences (Transcribed from DNA):")
+        st.markdown(f"**Original mRNA:** `{original_mrna}`")
+        st.markdown(f"**Mutated mRNA:** `{mutated_mrna}`")
+
+
+        # Display Protein sequences
+        st.markdown("### 🧪 Protein Sequences (Translated from mRNA):")
+        st.markdown(f"**Original Protein:** `{original_protein}`")
+        st.markdown(f"**Mutated Protein:** `{mutated_protein}`")
+
+        st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True) # Dotted separator
 
         st.markdown("### 🔬 Summary of Mutation:")
         st.markdown(
@@ -349,9 +377,11 @@ if st.button("🚀 Apply Mutation and Simulate"):
             unsafe_allow_html=True
         )
 
+        # The biological impact details will be populated in the next step based on mutation classification
         st.markdown("### 💡 Potential Biological Impact:")
         with st.expander("Click to learn more about the biological impact of this mutation type"):
+            # This section will be dynamic based on classification in the next step
             st.markdown(
-                f"<div class='biological-impact-box'>{biological_impact_details}</div>",
+                f"<div class='biological-impact-box'>{biological_impact_details if biological_impact_details else 'Details will appear here after mutation classification is implemented!'}</div>",
                 unsafe_allow_html=True
             )
