@@ -28,6 +28,13 @@ st.markdown(
         padding: 2px 0px; /* Adjust padding for better look */
         border-radius: 3px;
     }
+    .highlight-blue { /* For highlighting mRNA/Protein differences */
+        color: #8BE9FD; /* Cyan/blue color */
+        font-weight: bold;
+        background-color: #002233; /* Darker blue background for highlight */
+        padding: 2px 0px;
+        border-radius: 3px;
+    }
     .stButton>button {
         background-color: #6272a4; /* Darker background for buttons */
         color: white;
@@ -134,13 +141,8 @@ def transcribe_dna_to_mrna(dna_seq):
 def translate_mrna_to_protein(mrna_seq):
     """Translates an mRNA sequence into an amino acid sequence."""
     protein = []
-    # Find the first 'AUG' (Methionine) to start translation
     start_codon_idx = mrna_seq.find('AUG')
     
-    # If no AUG is found, or if the sequence before AUG is too short to form a codon,
-    # or if we are translating a very short segment,
-    # translate from the beginning of the sequence.
-    # This is a simplification for demonstration, actual translation initiation is complex.
     if start_codon_idx == -1 or start_codon_idx % 3 != 0:
         coding_sequence = mrna_seq
     else:
@@ -148,9 +150,9 @@ def translate_mrna_to_protein(mrna_seq):
 
     for i in range(0, len(coding_sequence) - len(coding_sequence) % 3, 3):
         codon = coding_sequence[i:i+3]
-        amino_acid = GENETIC_CODE.get(codon, 'X') # 'X' for unknown/invalid codon
+        amino_acid = GENETIC_CODE.get(codon, 'X')
         protein.append(amino_acid)
-        if amino_acid == '*': # Stop codon
+        if amino_acid == '*':
             break
     return "".join(protein)
 
@@ -167,15 +169,15 @@ def get_codon_at_position(sequence, pos_idx_0based):
     
     codon_start_idx = (pos_idx_0based // 3) * 3
     if codon_start_idx + 3 > len(sequence):
-        return None, None # Not enough bases to form a full codon
+        return None, None
     
     codon = sequence[codon_start_idx : codon_start_idx + 3]
     return codon, codon_start_idx
 
 
-def highlight_mutation(original_seq, mutated_seq, position, mutation_type, length=1):
+def highlight_mutation_dna(original_seq, mutated_seq, position, mutation_type, length=1):
     """
-    Highlight the mutated parts in red.
+    Highlight the mutated parts in red for DNA sequences.
     Returns (highlighted original, highlighted mutated) sequences as HTML strings.
     Positions are 0-based for internal function use.
     """
@@ -190,13 +192,94 @@ def highlight_mutation(original_seq, mutated_seq, position, mutation_type, lengt
             orig_highlight = original_seq[:position] + wrap_red(original_seq[position]) + original_seq[position+1:]
             mut_highlight = mutated_seq[:position] + wrap_red(mutated_seq[position]) + mutated_seq[position+1:]
     elif mutation_type == "insertion":
-        if 0 <= position <= len(mutated_seq) - length: # position can be len(mutated_seq) if inserting at end
+        if 0 <= position <= len(mutated_seq) - length:
             mut_highlight = mutated_seq[:position] + wrap_red(mutated_seq[position:position+length]) + mutated_seq[position+length:]
     elif mutation_type == "deletion":
         if 0 <= position <= len(original_seq) - length:
             orig_highlight = original_seq[:position] + wrap_red(original_seq[position:position+length]) + original_seq[position+length:]
 
     return orig_highlight, mut_highlight
+
+
+def highlight_mrna_protein_diff(original_seq, mutated_seq, dna_mutation_pos_idx, mutation_type, mutation_len):
+    """
+    Highlights differences between original and mutated mRNA/Protein sequences in blue.
+    For point mutations, highlights the specific affected codon/amino acid.
+    For frameshifts, highlights from the first point of divergence.
+    """
+    def wrap_blue(text):
+        return f"<span class='highlight-blue'>{text}</span>"
+
+    orig_highlighted = list(original_seq)
+    mut_highlighted = list(mutated_seq)
+
+    # Determine the 'logical' start of the change in mRNA/Protein sequence
+    # For point mutations, it's roughly the corresponding codon's start
+    # For indels, it's the point of insertion/deletion or the nearest codon start
+    
+    # Calculate the corresponding mRNA/protein position (approximate)
+    # This might need refinement for edge cases, but covers most scenarios
+    mrna_start_highlight_idx = (dna_mutation_pos_idx // 3) * 3 # for mRNA, codon start
+    protein_start_highlight_idx = dna_mutation_pos_idx // 3 # for protein, amino acid start
+
+    if mutation_type == "point":
+        # For point mutations, highlight only the affected codon/AA if they differ
+        orig_aa = original_seq[protein_start_highlight_idx] if 0 <= protein_start_highlight_idx < len(original_seq) else None
+        mut_aa = mutated_seq[protein_start_highlight_idx] if 0 <= protein_start_highlight_idx < len(mutated_seq) else None
+
+        if orig_aa != mut_aa: # If amino acid actually changed (not silent)
+            if 0 <= mrna_start_highlight_idx < len(orig_highlighted) - 2: # ensure full codon
+                for i in range(3): # Highlight the 3 bases of the affected codon in mRNA
+                    orig_highlighted[mrna_start_highlight_idx + i] = wrap_blue(orig_highlighted[mrna_start_highlight_idx + i])
+                    if mrna_start_highlight_idx + i < len(mut_highlighted): # check bounds for mutated
+                        mut_highlighted[mrna_start_highlight_idx + i] = wrap_blue(mut_highlighted[mrna_start_highlight_idx + i])
+            
+            if 0 <= protein_start_highlight_idx < len(orig_highlighted):
+                orig_highlighted_aa = orig_highlighted[protein_start_highlight_idx]
+                mut_highlighted_aa = mut_highlighted[protein_start_highlight_idx]
+                
+                # Re-wrap single amino acid if it changed
+                if isinstance(orig_highlighted_aa, str) and orig_highlighted_aa == orig_aa:
+                    orig_highlighted[protein_start_highlight_idx] = wrap_blue(orig_aa)
+                if isinstance(mut_highlighted_aa, str) and mut_highlighted_aa == mut_aa:
+                    mut_highlighted[protein_start_highlight_idx] = wrap_blue(mut_aa)
+
+
+    elif mutation_type in ["insertion", "deletion"]:
+        # For frameshifts or in-frame indels, highlight from the point of divergence onwards
+        # Find first differing character
+        first_diff_idx = -1
+        min_len = min(len(original_seq), len(mutated_seq))
+        for i in range(min_len):
+            if original_seq[i] != mutated_seq[i]:
+                first_diff_idx = i
+                break
+        
+        if first_diff_idx == -1 and len(original_seq) != len(mutated_seq):
+            # If one is a prefix of the other, highlight the added/removed tail
+            first_diff_idx = min_len 
+
+        if first_diff_idx != -1:
+            for i in range(first_diff_idx, len(orig_highlighted)):
+                orig_highlighted[i] = wrap_blue(orig_highlighted[i])
+            for i in range(first_diff_idx, len(mut_highlighted)):
+                mut_highlighted[i] = wrap_blue(mut_highlighted[i])
+        
+        # Special case for deletion where original sequence is longer but might become same
+        if first_diff_idx == -1 and len(original_seq) > len(mutated_seq):
+            # If the mutated sequence is shorter and fits perfectly into the original's start
+            # This implies the end of the original sequence was deleted. Highlight that.
+            for i in range(len(mutated_seq), len(orig_highlighted)):
+                orig_highlighted[i] = wrap_blue(orig_highlighted[i])
+        elif first_diff_idx == -1 and len(mutated_seq) > len(original_seq):
+            # If the mutated sequence is longer and original fits perfectly into its start
+            # This implies something was added at the end of original. Highlight that.
+            for i in range(len(original_seq), len(mut_highlighted)):
+                mut_highlighted[i] = wrap_blue(mut_highlighted[i])
+
+
+    return "".join(orig_highlighted), "".join(mut_highlighted)
+
 
 # --- Session State Initialization ---
 if "dna_input" not in st.session_state:
@@ -452,13 +535,30 @@ if st.button("🚀 Apply Mutation and Simulate"):
                 * Often results in a **premature stop codon** and a **non-functional protein**, leading to severe consequences.
                 """
         # --- Display Results ---
-        orig_highlight_dna, mut_highlight_dna = highlight_mutation(
+        orig_highlight_dna, mut_highlight_dna = highlight_mutation_dna(
             seq,
             mutated_seq,
             pos_idx,
             mutation_type,
             length=mutation_length_for_highlight
         )
+
+        # New: Highlight mRNA and Protein
+        orig_highlight_mrna, mut_highlight_mrna = highlight_mrna_protein_diff(
+            original_mrna,
+            mutated_mrna,
+            pos_idx, # Pass the DNA mutation index for reference
+            mutation_type,
+            mutation_length_for_highlight
+        )
+        orig_highlight_protein, mut_highlight_protein = highlight_mrna_protein_diff(
+            original_protein,
+            mutated_protein,
+            pos_idx, # Pass the DNA mutation index for reference
+            mutation_type,
+            mutation_length_for_highlight
+        )
+
 
         st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True)
 
@@ -477,12 +577,13 @@ if st.button("🚀 Apply Mutation and Simulate"):
         st.markdown("---")
 
         st.markdown("### 📊 mRNA Sequences (Transcribed from DNA):")
-        st.markdown(f"**Original mRNA:** `{original_mrna}`")
-        st.markdown(f"**Mutated mRNA:** `{mutated_mrna}`")
+        st.markdown(f"**Original mRNA:** <div class='output-box'>{orig_highlight_mrna}</div>", unsafe_allow_html=True)
+        st.markdown(f"**Mutated mRNA:** <div class='output-box'>{mut_highlight_mrna}</div>", unsafe_allow_html=True)
+
 
         st.markdown("### 🧪 Protein Sequences (Translated from mRNA):")
-        st.markdown(f"**Original Protein:** `{original_protein}`")
-        st.markdown(f"**Mutated Protein:** `{mutated_protein}`")
+        st.markdown(f"**Original Protein:** <div class='output-box'>{orig_highlight_protein}</div>", unsafe_allow_html=True)
+        st.markdown(f"**Mutated Protein:** <div class='output-box'>{mut_highlight_protein}</div>", unsafe_allow_html=True)
 
         st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True)
 
