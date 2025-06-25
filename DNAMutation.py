@@ -9,34 +9,34 @@ st.markdown(
     """
     <style>
     body {
-        background-color: #000000;
+        background-color: #000000; /* Pure black background */
         color: white;
     }
     .output-box {
-        background-color: #444444;
+        background-color: #1a1a1a; /* Very dark gray for output boxes, slightly off black */
         padding: 10px;
         border-radius: 8px;
         font-family: monospace;
         white-space: pre-wrap;
         word-break: break-word;
-        border: 1px solid #6272a4; /* Added a subtle border */
+        border: 1px solid #6272a4;
     }
     .highlight-red {
-        color: #FF5555; /* A slightly softer red */
+        color: #FF6666; /* Slightly brighter red for better visibility on black */
         font-weight: bold;
-        background-color: #330000; /* Subtle background for highlight */
-        padding: 2px 0px; /* Adjust padding for better look */
+        background-color: #550000; /* Darker red background for highlight */
+        padding: 2px 0px;
         border-radius: 3px;
     }
-    .highlight-blue { /* For highlighting mRNA/Protein differences */
-        color: #8BE9FD; /* Cyan/blue color */
+    .highlight-blue {
+        color: #99EEFF; /* Brighter cyan/blue for better visibility on black */
         font-weight: bold;
-        background-color: #002233; /* Darker blue background for highlight */
+        background-color: #00334d; /* Darker blue background for highlight */
         padding: 2px 0px;
         border-radius: 3px;
     }
     .stButton>button {
-        background-color: #6272a4; /* Darker background for buttons */
+        background-color: #6272a4;
         color: white;
         border-radius: 8px;
         border: none;
@@ -45,16 +45,16 @@ st.markdown(
         transition: background-color 0.3s ease;
     }
     .stButton>button:hover {
-        background-color: #8be9fd; /* Lighter on hover */
+        background-color: #8be9fd;
         color: black;
     }
     .stSelectbox, .stNumberInput, .stTextInput, .stTextArea {
-        background-color: #282a36; /* Darker input fields */
+        background-color: #1e1e1e; /* Darker input fields, off-black */
         border-radius: 8px;
         padding: 10px;
     }
     .stTextInput>div>div>input, .stTextArea>div>div>textarea {
-        background-color: #282a36;
+        background-color: #1e1e1e;
         color: #f8f8f2;
         border: 1px solid #44475a;
         border-radius: 8px;
@@ -64,18 +64,24 @@ st.markdown(
         color: #f8f8f2;
     }
     .stNumberInput>div>div>input {
-        background-color: #282a36;
+        background-color: #1e1e1e;
         color: #f8f8f2;
         border: 1px solid #44475a;
         border-radius: 8px;
         padding: 8px;
     }
     .biological-impact-box {
-        background-color: #282a36;
+        background-color: #1a1a1a; /* Matching output-box for consistency */
         padding: 15px;
         border-radius: 8px;
-        border: 1px solid #bd93f9; /* Purple border for biological info */
+        border: 1px solid #bd93f9;
         margin-top: 15px;
+    }
+    /* Specific styling for the summary box */
+    .stMarkdown>div[data-testid="stMarkdownContainer"]>div>div>div>div>div {
+        background-color: #1a1a1a !important; /* Force background for summary box */
+        color: #ff6666 !important; /* Adjust text color for contrast */
+        border: 1px solid #ff6666 !important; /* Match red highlight border */
     }
     </style>
     """,
@@ -213,32 +219,24 @@ def highlight_mrna_protein_diff(original_seq, mutated_seq, dna_mutation_pos_idx,
     orig_highlighted = list(original_seq)
     mut_highlighted = list(mutated_seq)
 
-    # Determine the 'logical' start of the change in mRNA/Protein sequence
-    # For point mutations, it's roughly the corresponding codon's start
-    # For indels, it's the point of insertion/deletion or the nearest codon start
-    
-    # Calculate the corresponding mRNA/protein position (approximate)
-    # This might need refinement for edge cases, but covers most scenarios
-    mrna_start_highlight_idx = (dna_mutation_pos_idx // 3) * 3 # for mRNA, codon start
-    protein_start_highlight_idx = dna_mutation_pos_idx // 3 # for protein, amino acid start
+    mrna_start_highlight_idx = (dna_mutation_pos_idx // 3) * 3
+    protein_start_highlight_idx = dna_mutation_pos_idx // 3
 
     if mutation_type == "point":
-        # For point mutations, highlight only the affected codon/AA if they differ
         orig_aa = original_seq[protein_start_highlight_idx] if 0 <= protein_start_highlight_idx < len(original_seq) else None
         mut_aa = mutated_seq[protein_start_highlight_idx] if 0 <= protein_start_highlight_idx < len(mutated_seq) else None
 
-        if orig_aa != mut_aa: # If amino acid actually changed (not silent)
-            if 0 <= mrna_start_highlight_idx < len(orig_highlighted) - 2: # ensure full codon
-                for i in range(3): # Highlight the 3 bases of the affected codon in mRNA
+        if orig_aa != mut_aa:
+            if 0 <= mrna_start_highlight_idx < len(orig_highlighted) - 2:
+                for i in range(3):
                     orig_highlighted[mrna_start_highlight_idx + i] = wrap_blue(orig_highlighted[mrna_start_highlight_idx + i])
-                    if mrna_start_highlight_idx + i < len(mut_highlighted): # check bounds for mutated
+                    if mrna_start_highlight_idx + i < len(mut_highlighted):
                         mut_highlighted[mrna_start_highlight_idx + i] = wrap_blue(mut_highlighted[mrna_start_highlight_idx + i])
             
             if 0 <= protein_start_highlight_idx < len(orig_highlighted):
                 orig_highlighted_aa = orig_highlighted[protein_start_highlight_idx]
                 mut_highlighted_aa = mut_highlighted[protein_start_highlight_idx]
                 
-                # Re-wrap single amino acid if it changed
                 if isinstance(orig_highlighted_aa, str) and orig_highlighted_aa == orig_aa:
                     orig_highlighted[protein_start_highlight_idx] = wrap_blue(orig_aa)
                 if isinstance(mut_highlighted_aa, str) and mut_highlighted_aa == mut_aa:
@@ -246,8 +244,6 @@ def highlight_mrna_protein_diff(original_seq, mutated_seq, dna_mutation_pos_idx,
 
 
     elif mutation_type in ["insertion", "deletion"]:
-        # For frameshifts or in-frame indels, highlight from the point of divergence onwards
-        # Find first differing character
         first_diff_idx = -1
         min_len = min(len(original_seq), len(mutated_seq))
         for i in range(min_len):
@@ -256,7 +252,6 @@ def highlight_mrna_protein_diff(original_seq, mutated_seq, dna_mutation_pos_idx,
                 break
         
         if first_diff_idx == -1 and len(original_seq) != len(mutated_seq):
-            # If one is a prefix of the other, highlight the added/removed tail
             first_diff_idx = min_len 
 
         if first_diff_idx != -1:
@@ -265,15 +260,10 @@ def highlight_mrna_protein_diff(original_seq, mutated_seq, dna_mutation_pos_idx,
             for i in range(first_diff_idx, len(mut_highlighted)):
                 mut_highlighted[i] = wrap_blue(mut_highlighted[i])
         
-        # Special case for deletion where original sequence is longer but might become same
         if first_diff_idx == -1 and len(original_seq) > len(mutated_seq):
-            # If the mutated sequence is shorter and fits perfectly into the original's start
-            # This implies the end of the original sequence was deleted. Highlight that.
             for i in range(len(mutated_seq), len(orig_highlighted)):
                 orig_highlighted[i] = wrap_blue(orig_highlighted[i])
         elif first_diff_idx == -1 and len(mutated_seq) > len(original_seq):
-            # If the mutated sequence is longer and original fits perfectly into its start
-            # This implies something was added at the end of original. Highlight that.
             for i in range(len(original_seq), len(mut_highlighted)):
                 mut_highlighted[i] = wrap_blue(mut_highlighted[i])
 
@@ -588,8 +578,13 @@ if st.button("🚀 Apply Mutation and Simulate"):
         st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True)
 
         st.markdown("### 🔬 Summary of Mutation:")
+        # The summary box now has its own specific styling
         st.markdown(
-            f"<div style='background-color:#222;color:#ff5555;padding:15px;border-radius:10px;font-weight:bold; border: 1px solid #ff5555;'>{consequence_summary}</div>",
+            f"""
+            <div style='background-color:#1a1a1a;color:#FF6666;padding:15px;border-radius:10px;font-weight:bold; border: 1px solid #FF6666;'>
+                {consequence_summary}
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
