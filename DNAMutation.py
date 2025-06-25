@@ -8,12 +8,31 @@ st.set_page_config(page_title="🧬 DNA Mutation Lab", page_icon="🔬", layout=
 st.markdown(
     """
     <style>
+    /* Force full page background to black */
     body {
-        background-color: #000000; /* Pure black background */
-        color: white;
+        background-color: #000000 !important;
+        color: white; /* Ensure text is white for contrast */
     }
+    .stApp {
+        background-color: #000000 !important;
+    }
+    .main {
+        background-color: #000000 !important;
+    }
+    .block-container {
+        background-color: #000000 !important;
+    }
+    header.st-emotion-cache-s1q2x3v { /* Targeting Streamlit's header */
+        background-color: #000000 !important;
+    }
+    div[data-testid="stSidebar"] { /* Targeting Streamlit's sidebar if present */
+        background-color: #000000 !important;
+    }
+
+
+    /* Output boxes, slightly off-black for subtle contrast */
     .output-box {
-        background-color: #1a1a1a; /* Very dark gray for output boxes, slightly off black */
+        background-color: #1a1a1a;
         padding: 10px;
         border-radius: 8px;
         font-family: monospace;
@@ -21,20 +40,26 @@ st.markdown(
         word-break: break-word;
         border: 1px solid #6272a4;
     }
+
+    /* Highlighting for DNA */
     .highlight-red {
-        color: #FF6666; /* Slightly brighter red for better visibility on black */
+        color: #FF6666; /* Brighter red */
         font-weight: bold;
-        background-color: #550000; /* Darker red background for highlight */
+        background-color: #550000;
         padding: 2px 0px;
         border-radius: 3px;
     }
+
+    /* Highlighting for mRNA/Protein differences */
     .highlight-blue {
-        color: #99EEFF; /* Brighter cyan/blue for better visibility on black */
+        color: #99EEFF; /* Brighter cyan/blue */
         font-weight: bold;
-        background-color: #00334d; /* Darker blue background for highlight */
+        background-color: #00334d;
         padding: 2px 0px;
         border-radius: 3px;
     }
+
+    /* Buttons */
     .stButton>button {
         background-color: #6272a4;
         color: white;
@@ -48,9 +73,11 @@ st.markdown(
         background-color: #8be9fd;
         color: black;
     }
+
+    /* Input fields */
     .stSelectbox, .stNumberInput, .stTextInput, .stTextArea {
         background-color: #1e1e1e; /* Darker input fields, off-black */
-        border-radius: 8px;
+        border-radius: 8_px;
         padding: 10px;
     }
     .stTextInput>div>div>input, .stTextArea>div>div>textarea {
@@ -70,6 +97,8 @@ st.markdown(
         border-radius: 8px;
         padding: 8px;
     }
+
+    /* Biological Impact Box */
     .biological-impact-box {
         background-color: #1a1a1a; /* Matching output-box for consistency */
         padding: 15px;
@@ -77,11 +106,16 @@ st.markdown(
         border: 1px solid #bd93f9;
         margin-top: 15px;
     }
-    /* Specific styling for the summary box */
-    .stMarkdown>div[data-testid="stMarkdownContainer"]>div>div>div>div>div {
+
+    /* Specific styling for the summary box (the one showing "Point mutation: Substituted...") */
+    /* This targets Streamlit's internal structure for markdown elements to apply specific style */
+    div[data-testid="stMarkdownContainer"] div {
         background-color: #1a1a1a !important; /* Force background for summary box */
-        color: #ff6666 !important; /* Adjust text color for contrast */
-        border: 1px solid #ff6666 !important; /* Match red highlight border */
+        color: #FF6666 !important; /* Ensure text color is red */
+        border: 1px solid #FF6666 !important; /* Match red highlight border */
+        padding: 15px;
+        border-radius: 10px;
+        font-weight: bold;
     }
     </style>
     """,
@@ -578,7 +612,6 @@ if st.button("🚀 Apply Mutation and Simulate"):
         st.markdown("<hr style='border: 1px dashed #44475a;'>", unsafe_allow_html=True)
 
         st.markdown("### 🔬 Summary of Mutation:")
-        # The summary box now has its own specific styling
         st.markdown(
             f"""
             <div style='background-color:#1a1a1a;color:#FF6666;padding:15px;border-radius:10px;font-weight:bold; border: 1px solid #FF6666;'>
