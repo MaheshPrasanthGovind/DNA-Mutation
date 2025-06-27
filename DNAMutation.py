@@ -11,7 +11,7 @@ st.markdown(
     /* Force full page background to black */
     body {
         background-color: #000000 !important;
-        color: white; /* Ensure text is white for contrast */
+        color: #CCCCCC; /* Light grey for general text for better readability on black */
     }
     .stApp {
         background-color: #000000 !important;
@@ -30,22 +30,23 @@ st.markdown(
     }
 
 
-    /* Output boxes, slightly off-black for subtle contrast */
+    /* Output boxes (DNA, mRNA, Protein sequences) */
     .output-box {
-        background-color: #1a1a1a;
+        background-color: #1A1A1A; /* Very dark grey, subtly distinct from black */
+        color: #CCCCCC; /* Text inside output boxes is light grey */
         padding: 10px;
         border-radius: 8px;
         font-family: monospace;
         white-space: pre-wrap;
         word-break: break-word;
-        border: 1px solid #6272a4;
+        border: 1px solid #6272a4; /* Border color remains for structure */
     }
 
-    /* Highlighting for DNA */
+    /* Highlighting for DNA mutation */
     .highlight-red {
-        color: #FF6666; /* Brighter red */
+        color: #FF7777; /* Slightly brighter red for clarity */
         font-weight: bold;
-        background-color: #550000;
+        background-color: #660000; /* Darker red background */
         padding: 2px 0px;
         border-radius: 3px;
     }
@@ -54,14 +55,14 @@ st.markdown(
     .highlight-blue {
         color: #99EEFF; /* Brighter cyan/blue */
         font-weight: bold;
-        background-color: #00334d;
+        background-color: #004455; /* Darker blue background */
         padding: 2px 0px;
         border-radius: 3px;
     }
 
     /* Buttons */
     .stButton>button {
-        background-color: #6272a4;
+        background-color: #6272a4; /* Dracula theme purple */
         color: white;
         border-radius: 8px;
         border: none;
@@ -70,53 +71,63 @@ st.markdown(
         transition: background-color 0.3s ease;
     }
     .stButton>button:hover {
-        background-color: #8be9fd;
+        background-color: #8be9fd; /* Dracula theme cyan on hover */
         color: black;
     }
 
-    /* Input fields */
+    /* Input fields (text areas, number inputs, select boxes) */
     .stSelectbox, .stNumberInput, .stTextInput, .stTextArea {
-        background-color: #1e1e1e; /* Darker input fields, off-black */
-        border-radius: 8_px;
+        background-color: #222222; /* A slightly lighter dark grey for inputs */
+        border-radius: 8px;
         padding: 10px;
     }
     .stTextInput>div>div>input, .stTextArea>div>div>textarea {
-        background-color: #1e1e1e;
-        color: #f8f8f2;
+        background-color: #222222; /* Consistent background for actual input elements */
+        color: #CCCCCC; /* Text inside inputs is light grey */
         border: 1px solid #44475a;
         border-radius: 8px;
         padding: 8px;
     }
     .stSelectbox>div>div>div>span {
-        color: #f8f8f2;
+        color: #CCCCCC; /* Text inside selectbox is light grey */
     }
     .stNumberInput>div>div>input {
-        background-color: #1e1e1e;
-        color: #f8f8f2;
+        background-color: #222222; /* Consistent background for number input */
+        color: #CCCCCC; /* Text inside number input is light grey */
         border: 1px solid #44475a;
         border-radius: 8px;
         padding: 8px;
     }
 
-    /* Biological Impact Box */
+    /* Biological Impact Box (the expander content) */
     .biological-impact-box {
-        background-color: #1a1a1a; /* Matching output-box for consistency */
+        background-color: #1A1A1A; /* Consistent with output boxes */
+        color: #CCCCCC; /* Text inside this box is light grey */
         padding: 15px;
         border-radius: 8px;
-        border: 1px solid #bd93f9;
+        border: 1px solid #BD93F9; /* Dracula theme purple border */
         margin-top: 15px;
     }
 
     /* Specific styling for the summary box (the one showing "Point mutation: Substituted...") */
     /* This targets Streamlit's internal structure for markdown elements to apply specific style */
     div[data-testid="stMarkdownContainer"] div {
-        background-color: #1a1a1a !important; /* Force background for summary box */
-        color: #FF6666 !important; /* Ensure text color is red */
-        border: 1px solid #FF6666 !important; /* Match red highlight border */
+        background-color: #1A1A1A !important; /* Force background for summary box, consistent */
+        color: #FF7777 !important; /* Red text for summary, slightly brighter */
+        border: 1px solid #FF7777 !important; /* Match red highlight border */
         padding: 15px;
         border-radius: 10px;
         font-weight: bold;
     }
+
+    /* Specific style for st.expander header text */
+    .st-emotion-cache-1ftrzg7 p { /* Targeting the <p> tag inside the expander header */
+        color: #CCCCCC !important; /* Ensure expander title is light grey */
+    }
+    .st-emotion-cache-1ftrzg7 .st-emotion-cache-j4d57l { /* Targeting the expander icon */
+        color: #CCCCCC !important; /* Ensure expander icon is light grey */
+    }
+
     </style>
     """,
     unsafe_allow_html=True
@@ -552,7 +563,7 @@ if st.button("🚀 Apply Mutation and Simulate"):
                 """
             else:
                 biological_impact_details = f"""
-                **Type: Frameshift Deletion 🚨 (Length: {st.session_state.del_length})**
+                **Type: Frameshift Deletion 🚨 (Length: {st.session_state.del_length)})**
                 * The number of deleted bases ({st.session_state.del_length}) is NOT a multiple of 3.
                 * The genetic "reading frame" of the sequence is **shifted** from the point of deletion onwards.
                 * This drastically changes all downstream codons, leading to a completely different amino acid sequence.
@@ -614,7 +625,7 @@ if st.button("🚀 Apply Mutation and Simulate"):
         st.markdown("### 🔬 Summary of Mutation:")
         st.markdown(
             f"""
-            <div style='background-color:#1a1a1a;color:#FF6666;padding:15px;border-radius:10px;font-weight:bold; border: 1px solid #FF6666;'>
+            <div style='background-color:#1A1A1A;color:#FF7777;padding:15px;border-radius:10px;font-weight:bold; border: 1px solid #FF7777;'>
                 {consequence_summary}
             </div>
             """,
