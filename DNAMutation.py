@@ -563,7 +563,7 @@ if st.button("🚀 Apply Mutation and Simulate"):
                 """
             else:
                 biological_impact_details = f"""
-                **Type: Frameshift Deletion 🚨 (Length: {st.session_state.del_length)})**
+                **Type: Frameshift Deletion 🚨 (Length: {st.session_state.del_length})**
                 * The number of deleted bases ({st.session_state.del_length}) is NOT a multiple of 3.
                 * The genetic "reading frame" of the sequence is **shifted** from the point of deletion onwards.
                 * This drastically changes all downstream codons, leading to a completely different amino acid sequence.
